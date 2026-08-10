@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: platform
+  datasource:
+    url: jdbc:mysql://localhost:3306/trading_platform
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
