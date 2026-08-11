@@ -28,20 +28,25 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
 
         String authHeader = request.getHeader("Authorization");
-
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7); // strip "Bearer " prefix
+            String token = authHeader.substring(7);
+            boolean valid = jwtUtil.isTokenValid(token);
+            System.out.println("Token valid? " + valid);
 
-            if (jwtUtil.isTokenValid(token)) {
+            if (valid) {
                 String email = jwtUtil.extractEmail(token);
+                System.out.println("Extracted email: " + email);
 
                 UsernamePasswordAuthenticationToken authToken =
                         new UsernamePasswordAuthenticationToken(email, null, Collections.emptyList());
 
                 SecurityContextHolder.getContext().setAuthentication(authToken);
+                System.out.println("Authentication set in SecurityContext");
             }
+        } else {
+            System.out.println("No Bearer token found in header");
         }
 
-        filterChain.doFilter(request, response); // pass control to the next filter/controller
+        filterChain.doFilter(request, response);
     }
 }
