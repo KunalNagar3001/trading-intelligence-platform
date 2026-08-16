@@ -1,8 +1,10 @@
 package com.trading.platform.service;
 
 import com.trading.platform.model.mysql.Holding;
+import com.trading.platform.model.mysql.Transaction;
 import com.trading.platform.repository.mysql.HoldingRepository;
 import com.trading.platform.repository.mysql.UserRepository;
+import com.trading.platform.repository.mysql.TransactionRepository;
 import org.springframework.stereotype.Service;
 import java.util.List;
 
@@ -11,10 +13,12 @@ public class PortfolioService {
 
     private final HoldingRepository holdingRepository;
     private final UserRepository userRepository;
+    private final TransactionRepository transactionRepository;
 
-    public PortfolioService(HoldingRepository holdingRepository, UserRepository userRepository) {
+    public PortfolioService(HoldingRepository holdingRepository, UserRepository userRepository, TransactionRepository transactionRepository) {
         this.holdingRepository = holdingRepository;
         this.userRepository = userRepository;
+        this.transactionRepository = transactionRepository;
     }
 
     public List<Holding> getUserPortfolio(String email) {
@@ -41,7 +45,16 @@ public class PortfolioService {
         holdingRepository.deleteById(holdingId);
     }
 
-    private Long getUserIdFromEmail(String email) {
+    public List<Transaction> getUserTransactions(String email) {
+        Long userId = getUserIdFromEmail(email);
+        return transactionRepository.findByUserId(userId);
+    }
+
+    public Transaction addTransaction(String email, Transaction transaction) {
+        Long userId = getUserIdFromEmail(email);
+        transaction.setUserId(userId);
+        return transactionRepository.save(transaction);
+    }    private Long getUserIdFromEmail(String email) {
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"))
                 .getId();
