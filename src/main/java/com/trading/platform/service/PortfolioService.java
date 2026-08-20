@@ -5,8 +5,11 @@ import com.trading.platform.model.mysql.Transaction;
 import com.trading.platform.repository.mysql.HoldingRepository;
 import com.trading.platform.repository.mysql.UserRepository;
 import com.trading.platform.repository.mysql.TransactionRepository;
+import com.trading.platform.dto.request.BuyRequest;
 import org.springframework.stereotype.Service;
 import java.util.List;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 @Service
 public class PortfolioService {
@@ -54,7 +57,54 @@ public class PortfolioService {
         Long userId = getUserIdFromEmail(email);
         transaction.setUserId(userId);
         return transactionRepository.save(transaction);
-    }    private Long getUserIdFromEmail(String email) {
+    }
+
+    public Holding buyStock(String email, BuyRequest request) {
+        Long userId = getUserIdFromEmail(email);
+
+        // Step 1: Record the transaction
+        Transaction transaction = new Transaction();
+        transaction.setUserId(userId);
+        transaction.setSymbol(request.getSymbol());
+        transaction.setType(Transaction.TransactionType.BUY);
+        transaction.setPrice(request.getPrice());
+        transaction.setQuantity(request.getQuantity());
+        transaction.setDate(request.getDate() != null ? request.getDate() : java.time.LocalDate.now());
+        transactionRepository.save(transaction);
+
+        // Step 2: Update or create holding
+        List<Holding> existingHoldings = holdingRepository.findByUserId(userId);
+        Holding existingHolding = existingHoldings.stream()
+                .filter(h -> h.getSymbol().equals(request.getSymbol()))
+                .findFirst()
+                .orElse(null);
+
+        if (existingHolding != null) {
+            // Calculate new weighted average price
+            BigDecimal totalCost = existingHolding.getBuyPrice()
+                    .multiply(BigDecimal.valueOf(existingHolding.getQuantity()))
+                    .add(request.getPrice().multiply(BigDecimal.valueOf(request.getQuantity())));
+            int newQuantity = existingHolding.getQuantity() + request.getQuantity();
+            BigDecimal newAvgPrice = totalCost.divide(
+                    BigDecimal.valueOf(newQuantity), 2, java.math.RoundingMode.HALF_UP);
+
+            existingHolding.setQuantity(newQuantity);
+            existingHolding.setBuyPrice(newAvgPrice);
+            return holdingRepository.save(existingHolding);
+        } else {
+            // Create new holding
+            Holding holding = new Holding();
+            holding.setUserId(userId);
+            holding.setSymbol(request.getSymbol());
+            holding.setAssetType(request.getAssetType());
+            holding.setBuyPrice(request.getPrice());
+            holding.setQuantity(request.getQuantity());
+            holding.setBuyDate(request.getDate() != null ? request.getDate() : java.time.LocalDate.now());
+            return holdingRepository.save(holding);
+        }
+    }
+
+    private Long getUserIdFromEmail(String email) {
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"))
                 .getId();

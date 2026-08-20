@@ -4,6 +4,7 @@ import com.trading.platform.model.mysql.Holding;
 import com.trading.platform.model.mysql.Transaction;
 import com.trading.platform.service.PortfolioService;
 import org.springframework.security.core.Authentication;
+import com.trading.platform.dto.request.BuyRequest;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
@@ -45,5 +46,11 @@ public class PortfolioController {
     public Transaction addTransaction(Authentication authentication, @RequestBody Transaction transaction) {
         String email = authentication.getName();
         return portfolioService.addTransaction(email, transaction);
+    }
+
+    @PostMapping("/buy")
+    public Holding buyStock(Authentication authentication, @RequestBody BuyRequest request) {
+        String email = authentication.getName();
+        return portfolioService.buyStock(email, request);
     }
 }
