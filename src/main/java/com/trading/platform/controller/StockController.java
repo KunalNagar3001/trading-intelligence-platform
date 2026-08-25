@@ -19,4 +19,9 @@ public class StockController {
     public List<PriceHistory> getPriceHistory(@PathVariable String symbol) {
         return priceHistoryService.getPriceHistory(symbol);
     }
+
+    @GetMapping("/price/{symbol}/latest")
+    public String getLatestPrice(@PathVariable String symbol) {
+        return priceHistoryService.getLatestPrice(symbol);
+    }
 }
