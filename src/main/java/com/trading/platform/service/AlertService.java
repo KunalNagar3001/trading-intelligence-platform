@@ -36,7 +36,7 @@ public class AlertService {
         Long userId = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"))
                 .getId();
-        return alertRepository.findByUserId(userId);
+        return alertRepository.findByUserIdAndActiveTrue(userId);
     }
 
     public void deleteAlert(Long alertId) {

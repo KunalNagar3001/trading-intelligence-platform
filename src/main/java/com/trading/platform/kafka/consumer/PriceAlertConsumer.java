@@ -2,6 +2,7 @@ package com.trading.platform.kafka.consumer;
 
 import com.trading.platform.model.mysql.PriceAlert;
 import com.trading.platform.service.AlertService;
+import com.trading.platform.service.NotificationService;
 import com.trading.platform.websocket.PriceWebSocketHandler;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -13,11 +14,14 @@ public class PriceAlertConsumer {
 
     private final PriceWebSocketHandler webSocketHandler;
     private final AlertService alertService;
+    private final NotificationService notificationService;
 
     public PriceAlertConsumer(PriceWebSocketHandler webSocketHandler,
-                              AlertService alertService) {
+                              AlertService alertService,
+                              NotificationService notificationService) {
         this.webSocketHandler = webSocketHandler;
         this.alertService = alertService;
+        this.notificationService = notificationService;
     }
 
     @KafkaListener(topics = "price-events", groupId = "trading-platform-group")
@@ -52,7 +56,7 @@ public class PriceAlertConsumer {
 
             if (triggered) {
                 alertService.deactivateAlert(alert);
-                // In Phase 4, this would send an email/push notification
+                notificationService.sendAlertTriggeredEmail(alert, price);
             }
         }
     }

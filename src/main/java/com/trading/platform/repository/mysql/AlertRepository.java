@@ -10,5 +10,7 @@ public interface AlertRepository extends JpaRepository<PriceAlert, Long> {
 
     List<PriceAlert> findByUserId(Long userId);
 
+    List<PriceAlert> findByUserIdAndActiveTrue(Long userId);
+
     List<PriceAlert> findBySymbolAndActiveTrue(String symbol);
 }
