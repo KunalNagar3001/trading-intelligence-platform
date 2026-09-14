@@ -1,5 +1,8 @@
 package com.trading.platform.service;
 
+import com.trading.platform.exception.HoldingNotFoundException;
+import com.trading.platform.exception.UnauthorizedActionException;
+import com.trading.platform.exception.UserNotFoundException;
 import com.trading.platform.model.mysql.Holding;
 import com.trading.platform.model.mysql.Transaction;
 import com.trading.platform.repository.mysql.HoldingRepository;
@@ -39,10 +42,10 @@ public class PortfolioService {
         Long userId = getUserIdFromEmail(email);
 
         Holding holding = holdingRepository.findById(holdingId)
-                .orElseThrow(() -> new RuntimeException("Holding not found"));
+                .orElseThrow(() -> new HoldingNotFoundException("Holding not found"));
 
         if (!holding.getUserId().equals(userId)) {
-            throw new RuntimeException("You do not have permission to delete this holding");
+            throw new UnauthorizedActionException("You do not have permission to delete this holding");
         }
 
         holdingRepository.deleteById(holdingId);
@@ -106,7 +109,7 @@ public class PortfolioService {
 
     private Long getUserIdFromEmail(String email) {
         return userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"))
+                .orElseThrow(() -> new UserNotFoundException("User not found"))
                 .getId();
     }
 }

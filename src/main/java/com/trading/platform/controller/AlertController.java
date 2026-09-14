@@ -29,7 +29,7 @@ public class AlertController {
     }
 
     @DeleteMapping("/{id}")
-    public void deleteAlert(@PathVariable Long id) {
-        alertService.deleteAlert(id);
+    public void deleteAlert(Authentication authentication, @PathVariable Long id) {
+        alertService.deleteAlert(authentication.getName(), id);
     }
 }

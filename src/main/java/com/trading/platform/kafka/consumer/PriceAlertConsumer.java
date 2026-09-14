@@ -35,28 +35,52 @@ public class PriceAlertConsumer {
 
         // Check price alerts
         List<PriceAlert> activeAlerts = alertService.getActiveAlertsForSymbol(symbol);
-        BigDecimal currentPrice = BigDecimal.valueOf(price);
 
         for (PriceAlert alert : activeAlerts) {
-            boolean triggered = false;
-
-            if (alert.getCondition() == PriceAlert.AlertCondition.ABOVE
-                    && currentPrice.compareTo(alert.getTargetPrice()) >= 0) {
-                triggered = true;
-                System.out.println("🚨 ALERT TRIGGERED: " + symbol
-                        + " is ABOVE ₹" + alert.getTargetPrice()
-                        + " (current: ₹" + price + ") — User ID: " + alert.getUserId());
-            } else if (alert.getCondition() == PriceAlert.AlertCondition.BELOW
-                    && currentPrice.compareTo(alert.getTargetPrice()) <= 0) {
-                triggered = true;
-                System.out.println("🚨 ALERT TRIGGERED: " + symbol
-                        + " is BELOW ₹" + alert.getTargetPrice()
-                        + " (current: ₹" + price + ") — User ID: " + alert.getUserId());
-            }
-
-            if (triggered) {
+            if (isTriggered(alert, price)) {
+                logTrigger(alert, symbol, price);
                 alertService.deactivateAlert(alert);
                 notificationService.sendAlertTriggeredEmail(alert, price);
+            }
+        }
+    }
+
+    private boolean isTriggered(PriceAlert alert, double price) {
+        return switch (alert.getAlertType()) {
+            case TARGET_PRICE, STOP_LOSS -> isTargetPriceTriggered(alert, price);
+            case PERCENTAGE_CHANGE -> isPercentageChangeTriggered(alert, price);
+        };
+    }
+
+    private boolean isTargetPriceTriggered(PriceAlert alert, double price) {
+        BigDecimal currentPrice = BigDecimal.valueOf(price);
+        BigDecimal target = alert.getTargetPrice();
+        return alert.getCondition() == PriceAlert.AlertCondition.ABOVE
+                ? currentPrice.compareTo(target) >= 0
+                : currentPrice.compareTo(target) <= 0;
+    }
+
+    private boolean isPercentageChangeTriggered(PriceAlert alert, double price) {
+        double basePrice = alert.getBasePrice().doubleValue();
+        double percentChange = ((price - basePrice) / basePrice) * 100;
+        return alert.getCondition() == PriceAlert.AlertCondition.ABOVE
+                ? percentChange >= alert.getPercentageThreshold()
+                : percentChange <= -alert.getPercentageThreshold();
+    }
+
+    private void logTrigger(PriceAlert alert, String symbol, double price) {
+        switch (alert.getAlertType()) {
+            case TARGET_PRICE -> System.out.println("🚨 ALERT TRIGGERED: " + symbol
+                    + " is " + alert.getCondition() + " ₹" + alert.getTargetPrice()
+                    + " (current: ₹" + price + ") — User ID: " + alert.getUserId());
+            case STOP_LOSS -> System.out.println("🛑 STOP-LOSS TRIGGERED: " + symbol
+                    + " fell to/below ₹" + alert.getTargetPrice()
+                    + " (current: ₹" + price + ") — User ID: " + alert.getUserId());
+            case PERCENTAGE_CHANGE -> {
+                double basePrice = alert.getBasePrice().doubleValue();
+                double percentChange = ((price - basePrice) / basePrice) * 100;
+                System.out.printf("📈 PERCENTAGE ALERT TRIGGERED: %s moved %.2f%% from base ₹%s (current: ₹%.2f) — User ID: %d%n",
+                        symbol, percentChange, alert.getBasePrice(), price, alert.getUserId());
             }
         }
     }
