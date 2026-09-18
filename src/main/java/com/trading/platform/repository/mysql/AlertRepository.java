@@ -13,4 +13,8 @@ public interface AlertRepository extends JpaRepository<PriceAlert, Long> {
     List<PriceAlert> findByUserIdAndActiveTrue(Long userId);
 
     List<PriceAlert> findBySymbolAndActiveTrue(String symbol);
+
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT DISTINCT a.symbol FROM PriceAlert a WHERE a.active = true")
+    List<String> findDistinctActiveSymbols();
 }

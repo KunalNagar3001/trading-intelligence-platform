@@ -18,12 +18,14 @@ public class AlertService {
     private final AlertRepository alertRepository;
     private final UserRepository userRepository;
     private final RedisTemplate<String, String> redisTemplate;
+    private final InstrumentService instrumentService; // add to constructor + field
 
     public AlertService(AlertRepository alertRepository, UserRepository userRepository,
-                        RedisTemplate<String, String> redisTemplate) {
+                        RedisTemplate<String, String> redisTemplate, InstrumentService instrumentService) {
         this.alertRepository = alertRepository;
         this.userRepository = userRepository;
         this.redisTemplate = redisTemplate;
+        this.instrumentService = instrumentService;
     }
 
     public PriceAlert createAlert(String email, CreateAlertRequest request) {
@@ -32,6 +34,7 @@ public class AlertService {
                 .getId();
 
         String symbol = request.getSymbol().toUpperCase();
+        instrumentService.requireValidSymbol(symbol);   // <-- add this line
         PriceAlert.AlertType type = request.getAlertType() != null
                 ? request.getAlertType()
                 : PriceAlert.AlertType.TARGET_PRICE; // default, keeps old clients working

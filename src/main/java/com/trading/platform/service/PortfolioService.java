@@ -4,6 +4,7 @@ import com.trading.platform.exception.HoldingNotFoundException;
 import com.trading.platform.exception.UnauthorizedActionException;
 import com.trading.platform.exception.UserNotFoundException;
 import com.trading.platform.model.mysql.Holding;
+import com.trading.platform.model.mysql.Instrument;
 import com.trading.platform.model.mysql.Transaction;
 import com.trading.platform.repository.mysql.HoldingRepository;
 import com.trading.platform.repository.mysql.UserRepository;
@@ -20,11 +21,13 @@ public class PortfolioService {
     private final HoldingRepository holdingRepository;
     private final UserRepository userRepository;
     private final TransactionRepository transactionRepository;
+    private final MarketDataService marketDataService;
 
-    public PortfolioService(HoldingRepository holdingRepository, UserRepository userRepository, TransactionRepository transactionRepository) {
+    public PortfolioService(HoldingRepository holdingRepository, UserRepository userRepository, TransactionRepository transactionRepository, MarketDataService marketDataService) {
         this.holdingRepository = holdingRepository;
         this.userRepository = userRepository;
         this.transactionRepository = transactionRepository;
+        this.marketDataService = marketDataService;
     }
 
     public List<Holding> getUserPortfolio(String email) {
@@ -65,12 +68,16 @@ public class PortfolioService {
     public Holding buyStock(String email, BuyRequest request) {
         Long userId = getUserIdFromEmail(email);
 
-        // Step 1: Record the transaction
+        BigDecimal livePrice = marketDataService.getQuote(request.getSymbol())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Unknown symbol or no live price available: " + request.getSymbol()));
+
+        // Step 1: Record the transaction — livePrice, not whatever the client sent
         Transaction transaction = new Transaction();
         transaction.setUserId(userId);
         transaction.setSymbol(request.getSymbol());
         transaction.setType(Transaction.TransactionType.BUY);
-        transaction.setPrice(request.getPrice());
+        transaction.setPrice(livePrice);
         transaction.setQuantity(request.getQuantity());
         transaction.setDate(request.getDate() != null ? request.getDate() : java.time.LocalDate.now());
         transactionRepository.save(transaction);
@@ -83,24 +90,21 @@ public class PortfolioService {
                 .orElse(null);
 
         if (existingHolding != null) {
-            // Calculate new weighted average price
             BigDecimal totalCost = existingHolding.getBuyPrice()
                     .multiply(BigDecimal.valueOf(existingHolding.getQuantity()))
-                    .add(request.getPrice().multiply(BigDecimal.valueOf(request.getQuantity())));
+                    .add(livePrice.multiply(BigDecimal.valueOf(request.getQuantity())));
             int newQuantity = existingHolding.getQuantity() + request.getQuantity();
-            BigDecimal newAvgPrice = totalCost.divide(
-                    BigDecimal.valueOf(newQuantity), 2, java.math.RoundingMode.HALF_UP);
+            BigDecimal newAvgPrice = totalCost.divide(BigDecimal.valueOf(newQuantity), 2, java.math.RoundingMode.HALF_UP);
 
             existingHolding.setQuantity(newQuantity);
             existingHolding.setBuyPrice(newAvgPrice);
             return holdingRepository.save(existingHolding);
         } else {
-            // Create new holding
             Holding holding = new Holding();
             holding.setUserId(userId);
             holding.setSymbol(request.getSymbol());
             holding.setAssetType(request.getAssetType());
-            holding.setBuyPrice(request.getPrice());
+            holding.setBuyPrice(livePrice);
             holding.setQuantity(request.getQuantity());
             holding.setBuyDate(request.getDate() != null ? request.getDate() : java.time.LocalDate.now());
             return holdingRepository.save(holding);

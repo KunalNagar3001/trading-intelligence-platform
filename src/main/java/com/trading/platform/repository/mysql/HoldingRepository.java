@@ -9,4 +9,8 @@ import java.util.List;
 public interface HoldingRepository extends JpaRepository<Holding, Long> {
 
     List<Holding> findByUserId(Long userId);
+
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT DISTINCT h.symbol FROM Holding h")
+    List<String> findDistinctSymbols();
 }
