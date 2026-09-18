@@ -8,6 +8,8 @@ import com.trading.platform.model.mysql.PriceAlert;
 import com.trading.platform.repository.mysql.AlertRepository;
 import com.trading.platform.repository.mysql.UserRepository;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.beans.factory.annotation.Value;
+import com.trading.platform.service.MarketDataService;
 import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.util.List;
@@ -18,14 +20,19 @@ public class AlertService {
     private final AlertRepository alertRepository;
     private final UserRepository userRepository;
     private final RedisTemplate<String, String> redisTemplate;
-    private final InstrumentService instrumentService; // add to constructor + field
+    private final InstrumentService instrumentService;
+    private final MarketDataService marketDataService;
+
+    @Value("${app.market-data.mode:simulated}")
+    private String marketDataMode;
 
     public AlertService(AlertRepository alertRepository, UserRepository userRepository,
-                        RedisTemplate<String, String> redisTemplate, InstrumentService instrumentService) {
+                        RedisTemplate<String, String> redisTemplate, InstrumentService instrumentService, MarketDataService marketDataService) {
         this.alertRepository = alertRepository;
         this.userRepository = userRepository;
         this.redisTemplate = redisTemplate;
         this.instrumentService = instrumentService;
+        this.marketDataService = marketDataService;
     }
 
     public PriceAlert createAlert(String email, CreateAlertRequest request) {
@@ -34,10 +41,17 @@ public class AlertService {
                 .getId();
 
         String symbol = request.getSymbol().toUpperCase();
-        instrumentService.requireValidSymbol(symbol);   // <-- add this line
+
+        if ("live".equals(marketDataMode)) {
+            marketDataService.getQuote(symbol)
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Unknown symbol or no live price available: " + symbol));
+        } else {
+            instrumentService.requireValidSymbol(symbol);
+        }
         PriceAlert.AlertType type = request.getAlertType() != null
                 ? request.getAlertType()
-                : PriceAlert.AlertType.TARGET_PRICE; // default, keeps old clients working
+                : PriceAlert.AlertType.TARGET_PRICE;
 
         PriceAlert alert = new PriceAlert();
         alert.setUserId(userId);

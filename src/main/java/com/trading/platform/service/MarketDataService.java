@@ -69,25 +69,9 @@ public class MarketDataService {
         }
     }
     public Map<String, BigDecimal> getQuotes(List<String> symbols) {
-        if (symbols.isEmpty()) return Map.of();
-
-        String joined = String.join(",", symbols);
-        String url = "https://query1.finance.yahoo.com/v7/finance/quote?symbols=" + joined;
-
         Map<String, BigDecimal> results = new HashMap<>();
-        try {
-            String body = restClient.get().uri(URI.create(url)).retrieve().body(String.class);
-            JsonNode quoteResponse = objectMapper.readTree(body).path("quoteResponse").path("result");
-
-            for (JsonNode q : quoteResponse) {
-                String symbol = q.path("symbol").asText(null);
-                double price = q.path("regularMarketPrice").asDouble(Double.NaN);
-                if (symbol != null && !Double.isNaN(price)) {
-                    results.put(symbol, BigDecimal.valueOf(price).setScale(2, RoundingMode.HALF_UP));
-                }
-            }
-        } catch (Exception e) {
-            System.err.println("Batch quote fetch failed: " + e.getMessage());
+        for (String symbol : symbols) {
+            getQuote(symbol).ifPresent(price -> results.put(symbol, price));
         }
         return results;
     }

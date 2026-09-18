@@ -4,7 +4,6 @@ import com.trading.platform.kafka.producer.PriceEventProducer;
 import com.trading.platform.repository.mysql.AlertRepository;
 import com.trading.platform.repository.mysql.HoldingRepository;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import java.util.Map;
@@ -15,7 +14,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import java.util.stream.Collectors;
 
 @Component
-@EnableScheduling
 @ConditionalOnProperty(name = "app.market-data.mode", havingValue = "simulated", matchIfMissing = true)
 public class PriceBroadcaster {
 
