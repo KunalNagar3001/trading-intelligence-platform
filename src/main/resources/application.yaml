@@ -43,3 +43,7 @@ spring:
 app:
   market-data:
     mode: live
+  news:
+    mode: live
+external-apis:
+  news-api-key: ${NEWS_API_KEY:}

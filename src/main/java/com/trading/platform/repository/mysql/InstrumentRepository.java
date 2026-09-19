@@ -14,6 +14,8 @@ public interface InstrumentRepository extends JpaRepository<Instrument, Long> {
 
     Optional<Instrument> findBySymbolAndActiveTrue(String symbol);
 
+    List<Instrument> findByActiveTrue();
+
     @Query("""
            SELECT i FROM Instrument i
            WHERE i.active = true
