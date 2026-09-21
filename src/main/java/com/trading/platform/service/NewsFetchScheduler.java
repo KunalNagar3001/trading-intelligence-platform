@@ -16,7 +16,7 @@ public class NewsFetchScheduler {
 
     // Every 10 min — NewsAPI.org free tier allows 100 requests/day (~1 every
     // 14 min if run 24/7), 10 min leaves headroom for manual calls elsewhere.
-    @Scheduled(fixedRate = 600000)
+    @Scheduled(fixedRate = 60000)
     public void fetchLatestNews() {
         newsAggregatorService.fetchAndProcessNews();
     }

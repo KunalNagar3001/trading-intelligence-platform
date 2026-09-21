@@ -25,14 +25,9 @@ import java.util.Locale;
 @Service
 public class NewsAggregatorService {
 
-    // Headline/description keywords worth alerting a holder about — everything
-    // else is still stored in the unified feed, just not treated as "urgent".
-    // Same idea SentimentService will refine once it exists.
-    private static final String[] IMPACT_KEYWORDS = {
-            "crash", "plunge", "surge", "rally", "probe", "fraud", "scam",
-            "circuit", "resignation", "verdict", "raid", "default",
-            "downgrade", "upgrade", "scandal", "investigation", "ban", "recall"
-    };
+    // Minimum |sentimentScore| for a tagged article to trigger a Kafka event /
+    // email — everything else still lands in the unified feed either way.
+    private static final double URGENT_SCORE_THRESHOLD = 0.5;
 
     private static final DateTimeFormatter NEWSAPI_DATE_FORMAT =
             DateTimeFormatter.ISO_OFFSET_DATE_TIME;
@@ -42,6 +37,7 @@ public class NewsAggregatorService {
     private final InstrumentRepository instrumentRepository;
     private final NewsRepository newsRepository;
     private final NewsEventProducer newsEventProducer;
+    private final SentimentService sentimentService;
 
     @Value("${external-apis.news-api-key:}")
     private String newsApiKey;
@@ -49,11 +45,13 @@ public class NewsAggregatorService {
     public NewsAggregatorService(ObjectMapper objectMapper,
                                  InstrumentRepository instrumentRepository,
                                  NewsRepository newsRepository,
-                                 NewsEventProducer newsEventProducer) {
+                                 NewsEventProducer newsEventProducer,
+                                 SentimentService sentimentService) {
         this.objectMapper = objectMapper;
         this.instrumentRepository = instrumentRepository;
         this.newsRepository = newsRepository;
         this.newsEventProducer = newsEventProducer;
+        this.sentimentService = sentimentService;
         this.restClient = RestClient.builder().build();
     }
 
@@ -69,7 +67,10 @@ public class NewsAggregatorService {
         }
 
         List<Instrument> activeInstruments = instrumentRepository.findByActiveTrue();
-        if (activeInstruments.isEmpty()) return;
+        if (activeInstruments.isEmpty()) {
+            System.out.println("No active instruments found — nothing to tag news against, skipping fetch");
+            return;
+        }
 
         String query = URLEncoder.encode(
                 "NSE OR BSE OR Sensex OR Nifty OR \"Indian stock market\"", StandardCharsets.UTF_8);
@@ -96,18 +97,24 @@ public class NewsAggregatorService {
             List<String> symbols = tagSymbols(headline, description, activeInstruments);
             if (symbols.isEmpty()) continue; // not relevant to anything we track
 
+            SentimentResult sentiment = sentimentService.analyze(headline + " " + description);
+
             NewsArticle article = new NewsArticle();
             article.setHeadline(headline);
             article.setDescription(description);
             article.setSource(a.path("source").path("name").asText("Unknown"));
             article.setUrl(articleUrl);
             article.setTaggedSymbols(symbols);
+            article.setSentiment(sentiment.label());
+            article.setSentimentScore(sentiment.score());
             article.setPublishedAt(parsePublishedAt(a.path("publishedAt").asText(null)));
 
             newsRepository.save(article);
             saved++;
 
-            if (isUrgent(headline, description)) {
+            // Urgent = strong sentiment in either direction, not just any tagged
+            // article — a mildly worded piece about a held stock isn't worth an email.
+            if (Math.abs(sentiment.score()) >= URGENT_SCORE_THRESHOLD) {
                 newsEventProducer.sendNewsEvent(article);
             }
         }
@@ -136,14 +143,6 @@ public class NewsAggregatorService {
             }
         }
         return matches;
-    }
-
-    private boolean isUrgent(String headline, String description) {
-        String text = (headline + " " + description).toLowerCase(Locale.ROOT);
-        for (String keyword : IMPACT_KEYWORDS) {
-            if (text.contains(keyword)) return true;
-        }
-        return false;
     }
 
     private LocalDateTime parsePublishedAt(String isoTimestamp) {

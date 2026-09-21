@@ -11,6 +11,8 @@ import java.math.RoundingMode;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.*;
 
 @Service
@@ -75,5 +77,57 @@ public class MarketDataService {
         }
         return results;
     }
+
+    /**
+     * Used by Stock DNA to auto-fill priceBefore/priceAfter for a canonical
+     * moment when the caller only supplies an eventDate. Pulls ~10 days of
+     * daily closes around the date from Yahoo's chart API (same endpoint
+     * getQuote uses, just with a period1/period2 range instead of "now"),
+     * then picks the last close strictly before eventDate and the first
+     * close on/after eventDate.
+     *
+     * Returns empty if Yahoo has no data in that window (delisted symbol,
+     * date too far in the past for Yahoo's free range, market holiday
+     * gaps swallowing the whole window, etc.) — caller should fall back
+     * to asking the user for manual prices in that case.
+     */
+    public Optional<HistoricalPriceWindow> getPricesAround(String symbol, LocalDate eventDate) {
+        long period1 = eventDate.minusDays(7).atStartOfDay(ZoneId.of("Asia/Kolkata")).toEpochSecond();
+        long period2 = eventDate.plusDays(7).atStartOfDay(ZoneId.of("Asia/Kolkata")).toEpochSecond();
+
+        String url = "https://query1.finance.yahoo.com/v8/finance/chart/" + symbol
+                + "?period1=" + period1 + "&period2=" + period2 + "&interval=1d";
+
+        try {
+            String body = restClient.get().uri(URI.create(url)).retrieve().body(String.class);
+            JsonNode result = objectMapper.readTree(body).path("chart").path("result");
+            if (!result.isArray() || result.isEmpty()) return Optional.empty();
+
+            JsonNode timestamps = result.get(0).path("timestamp");
+            JsonNode closes = result.get(0).path("indicators").path("quote").get(0).path("close");
+            if (!timestamps.isArray() || !closes.isArray()) return Optional.empty();
+
+            TreeMap<LocalDate, BigDecimal> closesByDate = new TreeMap<>();
+            for (int i = 0; i < timestamps.size(); i++) {
+                double close = closes.get(i).asDouble(Double.NaN);
+                if (Double.isNaN(close)) continue;
+                LocalDate date = java.time.Instant.ofEpochSecond(timestamps.get(i).asLong())
+                        .atZone(ZoneId.of("Asia/Kolkata")).toLocalDate();
+                closesByDate.put(date, BigDecimal.valueOf(close).setScale(2, RoundingMode.HALF_UP));
+            }
+
+            Map.Entry<LocalDate, BigDecimal> before = closesByDate.headMap(eventDate, false).lastEntry();
+            Map.Entry<LocalDate, BigDecimal> after = closesByDate.tailMap(eventDate, true).firstEntry();
+            if (before == null || after == null) return Optional.empty();
+
+            return Optional.of(new HistoricalPriceWindow(
+                    before.getValue(), before.getKey(), after.getValue(), after.getKey()));
+        } catch (Exception e) {
+            return Optional.empty();
+        }
+    }
+
+    public record HistoricalPriceWindow(BigDecimal priceBefore, LocalDate beforeDate,
+                                        BigDecimal priceAfter, LocalDate afterDate) {}
 
 }
