@@ -1,5 +1,7 @@
 package com.trading.platform.service;
 
+import com.trading.platform.dto.response.HoldingPnl;
+import com.trading.platform.dto.response.PortfolioSummary;
 import com.trading.platform.model.mongo.NewsArticle;
 import com.trading.platform.model.mysql.PriceAlert;
 import com.trading.platform.model.mysql.User;
@@ -63,6 +65,29 @@ public class NotificationService {
         }
     }
 
+    // NEW — sends the daily morning portfolio summary. Same never-throws contract:
+    // this runs inside a @Scheduled loop over every user with holdings, and one
+    // user's bad email address or a transient SMTP error must not stop the rest
+    // of the batch from being sent.
+    public void sendPortfolioSummaryEmail(User user, PortfolioSummary summary) {
+        if (fromAddress == null || fromAddress.isBlank()) {
+            log.warn("spring.mail.username is not configured — skipping portfolio summary email to {}", user.getEmail());
+            return;
+        }
+
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(fromAddress);
+            message.setTo(user.getEmail());
+            message.setSubject("Your Daily Portfolio Summary");
+            message.setText(buildSummaryBody(user, summary));
+            mailSender.send(message);
+            log.info("Portfolio summary email sent to {}", user.getEmail());
+        } catch (MailException e) {
+            log.error("Failed to send portfolio summary email to {}: {}", user.getEmail(), e.getMessage());
+        }
+    }
+
     private void sendEmail(User user, PriceAlert alert, double currentPrice) {
         if (fromAddress == null || fromAddress.isBlank()) {
             log.warn("spring.mail.username is not configured — skipping alert email to {}", user.getEmail());
@@ -107,6 +132,35 @@ public class NotificationService {
                         "Read more: %s%n%n" +
                         "— Trading Intelligence Platform",
                 user.getName(), symbol, article.getHeadline(), article.getSource(), article.getUrl()
+        );
+    }
+
+    private String buildSummaryBody(User user, PortfolioSummary summary) {
+        StringBuilder holdingLines = new StringBuilder();
+        for (HoldingPnl h : summary.holdings()) {
+            String staleTag = h.priceStale() ? "  (price unavailable — showing buy price)" : "";
+            holdingLines.append(String.format(
+                    "%-14s qty %-5d ₹%-10s -> ₹%-10s  P&L ₹%s (%s%%)%s%n",
+                    h.symbol(), h.quantity(), h.buyPrice(), h.currentPrice(),
+                    h.profitLoss(), h.profitLossPercent(), staleTag
+            ));
+        }
+
+        StringBuilder allocationLines = new StringBuilder();
+        summary.assetAllocationPercent().forEach((assetType, percent) ->
+                allocationLines.append(String.format("%-10s %s%%%n", assetType, percent)));
+
+        return String.format(
+                "Good morning %s,%n%n" +
+                        "Here's where your portfolio stands today:%n%n" +
+                        "%s%n" +
+                        "Total invested:     ₹%s%n" +
+                        "Current value:      ₹%s%n" +
+                        "Overall P&L:         ₹%s (%s%%)%n%n" +
+                        "Asset allocation:%n%s%n" +
+                        "— Trading Intelligence Platform",
+                user.getName(), holdingLines, summary.totalInvested(), summary.totalCurrentValue(),
+                summary.totalProfitLoss(), summary.totalProfitLossPercent(), allocationLines
         );
     }
 }

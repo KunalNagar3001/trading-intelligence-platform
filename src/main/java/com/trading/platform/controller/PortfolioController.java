@@ -5,6 +5,7 @@ import com.trading.platform.model.mysql.Transaction;
 import com.trading.platform.service.PortfolioService;
 import org.springframework.security.core.Authentication;
 import com.trading.platform.dto.request.BuyRequest;
+import com.trading.platform.dto.request.SellRequest;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
@@ -24,33 +25,21 @@ public class PortfolioController {
         return portfolioService.getUserPortfolio(email);
     }
 
-    @PostMapping("/holdings")
-    public Holding addHolding(Authentication authentication, @RequestBody Holding holding) {
-        String email = authentication.getName();
-        return portfolioService.addHolding(email, holding);
-    }
-
-    @DeleteMapping("/holdings/{id}")
-    public void deleteHolding(Authentication authentication, @PathVariable Long id) {
-        String email = authentication.getName();
-        portfolioService.deleteHolding(email, id);
-    }
-
     @GetMapping("/transactions")
     public List<Transaction> getTransactions(Authentication authentication) {
         String email = authentication.getName();
         return portfolioService.getUserTransactions(email);
     }
 
-    @PostMapping("/transactions")
-    public Transaction addTransaction(Authentication authentication, @RequestBody Transaction transaction) {
-        String email = authentication.getName();
-        return portfolioService.addTransaction(email, transaction);
-    }
-
     @PostMapping("/buy")
     public Holding buyStock(Authentication authentication, @RequestBody BuyRequest request) {
         String email = authentication.getName();
         return portfolioService.buyStock(email, request);
+    }
+
+    @PostMapping("/sell")
+    public Transaction sellStock(Authentication authentication, @RequestBody SellRequest request) {
+        String email = authentication.getName();
+        return portfolioService.sellStock(email, request);
     }
 }
