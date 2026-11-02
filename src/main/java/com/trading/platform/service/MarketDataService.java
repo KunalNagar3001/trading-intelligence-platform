@@ -3,6 +3,10 @@ package com.trading.platform.service;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import com.trading.platform.dto.response.StockSearchResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -11,18 +15,36 @@ import java.math.RoundingMode;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 public class MarketDataService {
 
+    private static final Logger log = LoggerFactory.getLogger(MarketDataService.class);
+    private static final String QUOTE_KEY_PREFIX = "quote:";
+
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
+    private final RedisTemplate<String, String> redisTemplate;
+    private final Duration quoteCacheTtl;
 
-    public MarketDataService(ObjectMapper objectMapper) {
+    // How often a quote lookup was answered from Redis, and how often Yahoo had to be called
+    private final AtomicLong cacheHits = new AtomicLong();
+    private final AtomicLong cacheMisses = new AtomicLong();
+    private final AtomicLong yahooQuoteCalls = new AtomicLong();
+    private final Instant statsSince = Instant.now();
+
+    public MarketDataService(ObjectMapper objectMapper,
+                             RedisTemplate<String, String> redisTemplate,
+                             @Value("${app.market-data.quote-cache-ttl-seconds:10}") long quoteCacheTtlSeconds) {
         this.objectMapper = objectMapper;
+        this.redisTemplate = redisTemplate;
+        this.quoteCacheTtl = Duration.ofSeconds(quoteCacheTtlSeconds);
         this.restClient = RestClient.builder()
                 .defaultHeader("User-Agent",
                         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36")
@@ -55,7 +77,74 @@ public class MarketDataService {
         }
     }
 
+    /**
+     * Read-through cache: a recent quote for the symbol is served from Redis; otherwise Yahoo is asked
+     * and the answer is stored for a few seconds (app.market-data.quote-cache-ttl-seconds, default 10;
+     * 0 switches the cache off). Redis problems never break a quote: they just fall back to Yahoo.
+     */
     public Optional<BigDecimal> getQuote(String symbol) {
+        if (symbol == null) return Optional.empty();
+        if (!cacheEnabled()) return fetchQuoteFromYahoo(symbol);
+
+        String key = QUOTE_KEY_PREFIX + symbol.toUpperCase();
+        try {
+            String cached = redisTemplate.opsForValue().get(key);
+            if (cached != null) {
+                cacheHits.incrementAndGet();
+                return Optional.of(new BigDecimal(cached));
+            }
+        } catch (Exception e) {
+            log.warn("Quote cache read failed for {}: {}", symbol, e.getMessage());
+        }
+
+        cacheMisses.incrementAndGet();
+        Optional<BigDecimal> quote = fetchQuoteFromYahoo(symbol);
+        quote.ifPresent(price -> cacheQuote(key, price));
+        return quote;
+    }
+
+    /**
+     * Always asks Yahoo (never reads the cache) and refreshes the cache with each answer. Used by the
+     * price scheduler, so its polling keeps the cache warm for buy, sell, alerts and the daily summary.
+     */
+    public Map<String, BigDecimal> getFreshQuotes(List<String> symbols) {
+        Map<String, BigDecimal> results = new HashMap<>();
+        for (String symbol : symbols) {
+            fetchQuoteFromYahoo(symbol).ifPresent(price -> {
+                results.put(symbol, price);
+                cacheQuote(QUOTE_KEY_PREFIX + symbol.toUpperCase(), price);
+            });
+        }
+        return results;
+    }
+
+    private boolean cacheEnabled() {
+        return !quoteCacheTtl.isZero() && !quoteCacheTtl.isNegative();
+    }
+
+    private void cacheQuote(String key, BigDecimal price) {
+        if (!cacheEnabled()) return;
+        try {
+            redisTemplate.opsForValue().set(key, price.toPlainString(), quoteCacheTtl);
+        } catch (Exception e) {
+            log.warn("Quote cache write failed for {}: {}", key, e.getMessage());
+        }
+    }
+
+    public QuoteCacheStats getCacheStats() {
+        long hits = cacheHits.get();
+        long misses = cacheMisses.get();
+        long lookups = hits + misses;
+        double hitRatePercent = lookups == 0 ? 0.0 : Math.round(hits * 10000.0 / lookups) / 100.0;
+        return new QuoteCacheStats(hits, misses, yahooQuoteCalls.get(), hitRatePercent, quoteCacheTtl.toSeconds(), statsSince);
+    }
+
+    /** hits + misses = quote lookups; yahooQuoteCalls also counts the scheduler's own fresh fetches. */
+    public record QuoteCacheStats(long hits, long misses, long yahooQuoteCalls,
+                                  double hitRatePercent, long ttlSeconds, Instant since) {}
+
+    private Optional<BigDecimal> fetchQuoteFromYahoo(String symbol) {
+        yahooQuoteCalls.incrementAndGet();
         String url = "https://query1.finance.yahoo.com/v8/finance/chart/" + symbol;
         try {
             String body = restClient.get().uri(URI.create(url)).retrieve().body(String.class);

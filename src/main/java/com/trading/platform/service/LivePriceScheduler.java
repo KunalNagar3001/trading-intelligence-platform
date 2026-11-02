@@ -40,7 +40,7 @@ public class LivePriceScheduler {
         Set<String> watched = getWatchedSymbols();
         if (watched.isEmpty()) return;
 
-        Map<String, BigDecimal> quotes = marketDataService.getQuotes(List.copyOf(watched));
+        Map<String, BigDecimal> quotes = marketDataService.getFreshQuotes(List.copyOf(watched));
 
         quotes.forEach((symbol, price) -> {
             priceCacheService.put(symbol, price);

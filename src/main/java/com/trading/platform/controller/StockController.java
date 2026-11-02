@@ -40,4 +40,9 @@ public class StockController {
         return marketDataService.getQuote(symbol)
                 .orElseThrow(() -> new IllegalArgumentException("No live price available for " + symbol));
     }
+
+    @GetMapping("/cache-stats")
+    public MarketDataService.QuoteCacheStats getCacheStats() {
+        return marketDataService.getCacheStats();
+    }
 }

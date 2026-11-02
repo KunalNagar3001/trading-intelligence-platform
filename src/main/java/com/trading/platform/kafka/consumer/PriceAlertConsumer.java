@@ -1,37 +1,38 @@
 package com.trading.platform.kafka.consumer;
 
+import com.trading.platform.config.KafkaTopicConfig;
+import com.trading.platform.kafka.event.PriceEvent;
 import com.trading.platform.model.mysql.PriceAlert;
 import com.trading.platform.service.AlertService;
 import com.trading.platform.service.NotificationService;
-import com.trading.platform.websocket.PriceWebSocketHandler;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.util.List;
 
 @Component
 public class PriceAlertConsumer {
 
-    private final PriceWebSocketHandler webSocketHandler;
     private final AlertService alertService;
     private final NotificationService notificationService;
+    private final ObjectMapper objectMapper;
 
-    public PriceAlertConsumer(PriceWebSocketHandler webSocketHandler,
-                              AlertService alertService,
-                              NotificationService notificationService) {
-        this.webSocketHandler = webSocketHandler;
+    public PriceAlertConsumer(AlertService alertService,
+                              NotificationService notificationService,
+                              ObjectMapper objectMapper) {
         this.alertService = alertService;
         this.notificationService = notificationService;
+        this.objectMapper = objectMapper;
     }
 
-    @KafkaListener(topics = "price-events", groupId = "trading-platform-group")
+    // Own consumer group: this listener only evaluates alerts. The WebSocket push is done by
+    // PriceWebSocketConsumer, which reads the same topic independently.
+    @KafkaListener(topics = KafkaTopicConfig.PRICE_EVENTS, groupId = KafkaTopicConfig.PRICE_ALERT_GROUP)
     public void consumePriceEvent(String message) {
-        // Parse message
-        String symbol = message.split("\"symbol\":\"")[1].split("\"")[0];
-        double price = Double.parseDouble(message.split("\"price\":")[1].replace("}", ""));
-
-        // Broadcast via WebSocket
-        webSocketHandler.broadcastPrice(symbol, price);
+        PriceEvent event = PriceEvent.fromJson(objectMapper, message);
+        String symbol = event.symbol();
+        double price = event.price();
 
         // Check price alerts
         List<PriceAlert> activeAlerts = alertService.getActiveAlertsForSymbol(symbol);

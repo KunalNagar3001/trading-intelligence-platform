@@ -43,6 +43,7 @@ spring:
 app:
   market-data:
     mode: live
+    quote-cache-ttl-seconds: 10   # 0 switches the Redis quote cache off
   news:
     mode: live
 external-apis:
