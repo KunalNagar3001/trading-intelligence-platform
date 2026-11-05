@@ -5,6 +5,8 @@ import com.trading.platform.kafka.event.PriceEvent;
 import com.trading.platform.model.mysql.PriceAlert;
 import com.trading.platform.service.AlertService;
 import com.trading.platform.service.NotificationService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
@@ -13,6 +15,8 @@ import java.util.List;
 
 @Component
 public class PriceAlertConsumer {
+
+    private static final Logger log = LoggerFactory.getLogger(PriceAlertConsumer.class);
 
     private final AlertService alertService;
     private final NotificationService notificationService;
@@ -71,17 +75,15 @@ public class PriceAlertConsumer {
 
     private void logTrigger(PriceAlert alert, String symbol, double price) {
         switch (alert.getAlertType()) {
-            case TARGET_PRICE -> System.out.println("🚨 ALERT TRIGGERED: " + symbol
-                    + " is " + alert.getCondition() + " ₹" + alert.getTargetPrice()
-                    + " (current: ₹" + price + ") — User ID: " + alert.getUserId());
-            case STOP_LOSS -> System.out.println("🛑 STOP-LOSS TRIGGERED: " + symbol
-                    + " fell to/below ₹" + alert.getTargetPrice()
-                    + " (current: ₹" + price + ") — User ID: " + alert.getUserId());
+            case TARGET_PRICE -> log.info("Alert triggered: {} is {} ₹{} (current ₹{}), user {}",
+                    symbol, alert.getCondition(), alert.getTargetPrice(), price, alert.getUserId());
+            case STOP_LOSS -> log.info("Stop-loss triggered: {} fell to/below ₹{} (current ₹{}), user {}",
+                    symbol, alert.getTargetPrice(), price, alert.getUserId());
             case PERCENTAGE_CHANGE -> {
                 double basePrice = alert.getBasePrice().doubleValue();
                 double percentChange = ((price - basePrice) / basePrice) * 100;
-                System.out.printf("📈 PERCENTAGE ALERT TRIGGERED: %s moved %.2f%% from base ₹%s (current: ₹%.2f) — User ID: %d%n",
-                        symbol, percentChange, alert.getBasePrice(), price, alert.getUserId());
+                log.info("Percentage alert triggered: {} moved {}% from base ₹{} (current ₹{}), user {}",
+                        symbol, String.format("%.2f", percentChange), alert.getBasePrice(), price, alert.getUserId());
             }
         }
     }

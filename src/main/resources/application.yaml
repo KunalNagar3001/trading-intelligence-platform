@@ -8,7 +8,11 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
+    defer-datasource-initialization: true   # run data.sql after Hibernate creates the tables
+  sql:
+    init:
+      mode: always
   data:
     mongodb:
       host: localhost

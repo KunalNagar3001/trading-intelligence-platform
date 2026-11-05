@@ -108,19 +108,27 @@ public class NotificationService {
     }
 
     private String buildBody(User user, PriceAlert alert, double currentPrice) {
-        String direction = alert.getCondition() == PriceAlert.AlertCondition.ABOVE
-                ? "risen above"
-                : "fallen below";
-
         return String.format(
                 "Hi %s,%n%n" +
                         "Your price alert for %s has been triggered.%n%n" +
-                        "Condition: price %s ₹%s%n" +
+                        "Condition: %s%n" +
                         "Current price: ₹%.2f%n%n" +
                         "This alert has now been deactivated. You can set a new one anytime from your dashboard.%n%n" +
                         "— Trading Intelligence Platform",
-                user.getName(), alert.getSymbol(), direction, alert.getTargetPrice(), currentPrice
+                user.getName(), alert.getSymbol(), describeCondition(alert), currentPrice
         );
+    }
+
+    // PERCENTAGE_CHANGE alerts have no targetPrice (they use basePrice + percentageThreshold),
+    // so describing every alert by targetPrice printed "₹null" for them.
+    private String describeCondition(PriceAlert alert) {
+        boolean above = alert.getCondition() == PriceAlert.AlertCondition.ABOVE;
+        if (alert.getAlertType() == PriceAlert.AlertType.PERCENTAGE_CHANGE) {
+            return String.format("price %s by %s%% or more from the base price of ₹%s",
+                    above ? "rose" : "fell", alert.getPercentageThreshold(), alert.getBasePrice());
+        }
+        return String.format("price %s ₹%s",
+                above ? "risen above" : "fallen below", alert.getTargetPrice());
     }
 
     private String buildNewsBody(User user, NewsArticle article, String symbol) {
