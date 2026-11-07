@@ -21,8 +21,9 @@ public class StockController {
     }
 
     @GetMapping("/price/{symbol}")
-    public List<PriceHistory> getPriceHistory(@PathVariable String symbol) {
-        return priceHistoryService.getPriceHistory(symbol);
+    public List<PriceHistory> getPriceHistory(@PathVariable String symbol,
+                                              @RequestParam(defaultValue = "100") int limit) {
+        return priceHistoryService.getPriceHistory(symbol, limit);
     }
 
     @GetMapping("/price/{symbol}/latest")

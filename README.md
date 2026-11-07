@@ -20,10 +20,12 @@ to clients over WebSocket.
        group: alert  │         │ group: websocket
                      ▼         ▼
           PriceAlertConsumer   PriceWebSocketConsumer ─▶ WebSocket clients
+          PriceHistoryConsumer ─▶ MongoDB price_history (group: price-history)
           (MySQL alerts ─▶ email)
 
- News API ─▶ NewsFetchScheduler ─▶ Kafka news-events ─▶ NewsProcessingConsumer
-                                      (sentiment scoring ─▶ MongoDB, email to holders)
+ News API ─▶ NewsFetchScheduler ─▶ NewsAggregatorService (tag symbols, score sentiment, save to MongoDB)
+                                          └─ strong sentiment only ─▶ Kafka news-events
+                                                 ─▶ NewsProcessingConsumer ─▶ email holders
 
  MySQL: users, instruments, holdings, transactions, alerts      MongoDB: news, price history, stock DNA
 ```
@@ -75,8 +77,8 @@ Unit tests need no running services.
 | Area | Endpoints |
 |---|---|
 | Auth | `POST /api/auth/register`, `POST /api/auth/login` (returns a JWT) |
-| Stocks | `GET /api/stocks/quote/{symbol}`, `/price/{symbol}`, `/search`, `/cache-stats` |
-| Portfolio | `GET /api/portfolio`, `/transactions`; `POST /buy`, `/sell` |
+| Stocks | `GET /api/stocks/quote/{symbol}`, `/price/{symbol}?limit=100` (stored snapshots, newest first), `/price/{symbol}/latest`, `/search`, `/cache-stats` |
+| Portfolio | `GET /api/portfolio`, `/summary` (live P&L), `/transactions`; `POST /buy`, `/sell` |
 | Alerts | `POST/GET /api/alerts`, `DELETE /api/alerts/{id}`: target price, stop-loss, percentage change |
 | News | `GET /api/news/feed`, `/api/news/{symbol}` |
 | Stock DNA | `GET /api/dna/{symbol}` |

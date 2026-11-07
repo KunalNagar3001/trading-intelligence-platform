@@ -20,6 +20,7 @@ public class KafkaTopicConfig {
     // Each independent consumer of price-events gets its own group, so each one receives every event.
     public static final String PRICE_WEBSOCKET_GROUP = "price-websocket-group";
     public static final String PRICE_ALERT_GROUP = "price-alert-group";
+    public static final String PRICE_HISTORY_GROUP = "price-history-group";
 
     // Price events are keyed by symbol, so all events for one symbol land on the same partition
     // (and stay in order) while different symbols can be spread across partitions.

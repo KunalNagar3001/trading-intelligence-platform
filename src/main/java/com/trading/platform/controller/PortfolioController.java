@@ -1,5 +1,6 @@
 package com.trading.platform.controller;
 
+import com.trading.platform.dto.response.PortfolioSummary;
 import com.trading.platform.model.mysql.Holding;
 import com.trading.platform.model.mysql.Transaction;
 import com.trading.platform.service.PortfolioService;
@@ -23,6 +24,12 @@ public class PortfolioController {
     public List<Holding> getPortfolio(Authentication authentication) {
         String email = authentication.getName();
         return portfolioService.getUserPortfolio(email);
+    }
+
+    // Live valuation: profit/loss per holding, portfolio totals and allocation by asset type
+    @GetMapping("/summary")
+    public PortfolioSummary getSummary(Authentication authentication) {
+        return portfolioService.getPortfolioSummary(authentication.getName());
     }
 
     @GetMapping("/transactions")
