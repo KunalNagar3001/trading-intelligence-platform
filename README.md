@@ -72,6 +72,33 @@ On first start the app creates its tables and seeds a few NSE instruments (`src/
 
 Unit tests need no running services.
 
+## Dashboard (React)
+
+A small single-page dashboard in `frontend/` (React + Vite): sign in, see your portfolio re-valued live from the
+WebSocket price stream, buy and sell, and manage price alerts.
+
+```bash
+cd frontend
+npm install
+npm run dev          # http://localhost:5173
+```
+
+The backend must be running on port 8080 (set `BACKEND_URL` to use another). The dev server proxies `/api` and
+`/ws` to it, so no CORS setup is needed. Prices only stream for symbols you hold or have alerts on, so buy
+something or add an alert to see live updates.
+
+## Live price WebSocket
+
+Connect to `ws://localhost:8080/ws/prices` and authenticate with the first message:
+
+```json
+{"type":"auth","token":"<JWT from /api/auth/login>"}
+```
+
+The server replies `{"type":"ready"}`, then sends `{"symbol":"INFY.NS","price":1500.0}` only for symbols that user
+holds or has an active alert on. Clients that don't authenticate within 5 seconds, or send a bad token, are
+disconnected (close code 1008) and never receive prices.
+
 ## API overview
 
 | Area | Endpoints |
@@ -109,5 +136,6 @@ Caveat: the 120 ms figure is a single sample, not an average. Setting
   Holdings without a quote fall back to buy price and are flagged `priceStale`.
 - **The JWT signing key is hard-coded** in `JwtUtil` and must move to configuration before any real deployment.
 - **No integration tests yet.** Kafka, MySQL, Mongo and Redis paths are exercised manually, not in CI.
-- **No frontend.** Live prices are available over WebSocket but there is no UI.
+- **The dashboard is minimal:** no charts, no news view and no allocation breakdown.
+- **WebSocket auth is checked once, at connect.** A token that expires while a connection is open keeps working until the client disconnects, and the per-user watchlist is cached for 10 seconds, so a new holding or alert can take that long to start streaming. The upgrade request itself (`/ws/**`) is still open and any origin is allowed; only authenticated messages receive data.
 - **Single-node setup:** Kafka replication factor is 1.
