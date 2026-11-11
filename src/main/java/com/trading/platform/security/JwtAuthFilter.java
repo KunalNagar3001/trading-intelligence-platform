@@ -5,6 +5,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -15,6 +17,8 @@ import java.util.Collections;
 
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthFilter.class);
 
     private final JwtUtil jwtUtil;
 
@@ -30,21 +34,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
-            boolean valid = jwtUtil.isTokenValid(token);
-            System.out.println("Token valid? " + valid);
-
-            if (valid) {
-                String email = jwtUtil.extractEmail(token);
-                System.out.println("Extracted email: " + email);
-
+            if (jwtUtil.isTokenValid(token)) {
+                // the email is deliberately not logged: it is personal data and this runs on every request
                 UsernamePasswordAuthenticationToken authToken =
-                        new UsernamePasswordAuthenticationToken(email, null, Collections.emptyList());
-
+                        new UsernamePasswordAuthenticationToken(jwtUtil.extractEmail(token), null, Collections.emptyList());
                 SecurityContextHolder.getContext().setAuthentication(authToken);
-                System.out.println("Authentication set in SecurityContext");
+            } else {
+                log.debug("Rejected invalid or expired bearer token for {}", request.getRequestURI());
             }
-        } else {
-            System.out.println("No Bearer token found in header");
         }
 
         filterChain.doFilter(request, response);

@@ -53,6 +53,10 @@ docker run -d --name tip-kafka -p 9092:9092 apache/kafka:latest
 | `DB_PASSWORD` | MySQL password (must match `MYSQL_ROOT_PASSWORD` above) |
 | `NEWS_API_KEY` | API key for the news provider |
 
+Strongly recommended: `JWT_SECRET`, at least 32 characters (for example `openssl rand -base64 48`). It signs login
+tokens, and the app refuses to start if it is set but too short. If it is not set, the app generates a random key at
+startup and logs a warning, which works locally but logs everyone out on every restart.
+
 Optional: `DB_USERNAME` (default `root`), and `MAIL_USERNAME` / `MAIL_PASSWORD` / `MAIL_HOST` / `MAIL_PORT`
 for alert emails. Without `MAIL_USERNAME`, emails are skipped with a warning.
 
@@ -134,7 +138,7 @@ Caveat: the 120 ms figure is a single sample, not an average. Setting
   Each is captured as a `@Disabled` test in `SentimentServiceTest`.
 - **Quotes come from Yahoo Finance's unofficial endpoint**, so they can be rate-limited or unavailable.
   Holdings without a quote fall back to buy price and are flagged `priceStale`.
-- **The JWT signing key is hard-coded** in `JwtUtil` and must move to configuration before any real deployment.
+- **Tokens cannot be revoked and carry no roles.** A login token stays valid for 24 hours (`app.jwt.expiration-ms`) and there is no logout or refresh endpoint.
 - **No integration tests yet.** Kafka, MySQL, Mongo and Redis paths are exercised manually, not in CI.
 - **The dashboard is minimal:** no charts, no news view and no allocation breakdown.
 - **WebSocket auth is checked once, at connect.** A token that expires while a connection is open keeps working until the client disconnects, and the per-user watchlist is cached for 10 seconds, so a new holding or alert can take that long to start streaming. The upgrade request itself (`/ws/**`) is still open and any origin is allowed; only authenticated messages receive data.

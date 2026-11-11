@@ -45,6 +45,9 @@ spring:
         transport:
           protocol: smtp
 app:
+  jwt:
+    secret: ${JWT_SECRET:}   # at least 32 characters; if empty, a random key is generated at startup
+    expiration-ms: 86400000
   market-data:
     mode: live
     quote-cache-ttl-seconds: 10   # 0 switches the Redis quote cache off
