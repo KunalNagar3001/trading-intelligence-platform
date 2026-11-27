@@ -3,6 +3,7 @@ package com.trading.platform.service;
 import com.trading.platform.kafka.producer.PriceEventProducer;
 import com.trading.platform.repository.mysql.AlertRepository;
 import com.trading.platform.repository.mysql.HoldingRepository;
+import com.trading.platform.repository.mysql.WatchlistItemRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -22,17 +23,20 @@ public class LivePriceScheduler {
     private final PriceEventProducer priceEventProducer;
     private final AlertRepository alertRepository;
     private final HoldingRepository holdingRepository;
+    private final WatchlistItemRepository watchlistItemRepository;
 
     public LivePriceScheduler(MarketDataService marketDataService,
                               PriceCacheService priceCacheService,
                               PriceEventProducer priceEventProducer,
                               AlertRepository alertRepository,
-                              HoldingRepository holdingRepository) {
+                              HoldingRepository holdingRepository,
+                              WatchlistItemRepository watchlistItemRepository) {
         this.marketDataService = marketDataService;
         this.priceCacheService = priceCacheService;
         this.priceEventProducer = priceEventProducer;
         this.alertRepository = alertRepository;
         this.holdingRepository = holdingRepository;
+        this.watchlistItemRepository = watchlistItemRepository;
     }
 
     @Scheduled(fixedRate = 15000) // 15s — real quotes don't need 3s polling and this respects Yahoo's rate limits
@@ -51,6 +55,7 @@ public class LivePriceScheduler {
     private Set<String> getWatchedSymbols() {
         Set<String> symbols = new HashSet<>(alertRepository.findDistinctActiveSymbols());
         symbols.addAll(holdingRepository.findDistinctSymbols());
+        symbols.addAll(watchlistItemRepository.findDistinctSymbols());
         return symbols;
     }
 }
