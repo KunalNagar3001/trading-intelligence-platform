@@ -4,6 +4,7 @@ import com.trading.platform.model.mysql.Holding;
 import com.trading.platform.model.mysql.PriceAlert;
 import com.trading.platform.repository.mysql.AlertRepository;
 import com.trading.platform.repository.mysql.HoldingRepository;
+import com.trading.platform.repository.mysql.WatchlistItemRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -18,13 +19,15 @@ class WatchlistServiceTest {
 
     private HoldingRepository holdings;
     private AlertRepository alerts;
+    private WatchlistItemRepository watchlistItems;
     private WatchlistService service;
 
     @BeforeEach
     void setUp() {
         holdings = mock(HoldingRepository.class);
         alerts = mock(AlertRepository.class);
-        service = new WatchlistService(holdings, alerts);
+        watchlistItems = mock(WatchlistItemRepository.class);
+        service = new WatchlistService(holdings, alerts, watchlistItems);
     }
 
     @Test
@@ -49,6 +52,24 @@ class WatchlistServiceTest {
         when(alerts.findByUserIdAndActiveTrue(2L)).thenReturn(List.of());
 
         assertEquals(Set.of(), service.symbolsFor(2L));
+    }
+
+    @Test
+    void includesSymbolsFromWatchlists() {
+        when(holdings.findByUserId(1L)).thenReturn(List.of(holding("INFY.NS")));
+        when(alerts.findByUserIdAndActiveTrue(1L)).thenReturn(List.of());
+        when(watchlistItems.findDistinctSymbolsByUserId(1L)).thenReturn(List.of("tcs.ns", "SBIN.NS"));
+
+        assertEquals(Set.of("INFY.NS", "TCS.NS", "SBIN.NS"), service.symbolsFor(1L));
+    }
+
+    @Test
+    void aSymbolHeldAndWatchedAppearsOnce() {
+        when(holdings.findByUserId(1L)).thenReturn(List.of(holding("INFY.NS")));
+        when(alerts.findByUserIdAndActiveTrue(1L)).thenReturn(List.of(alert("INFY.NS")));
+        when(watchlistItems.findDistinctSymbolsByUserId(1L)).thenReturn(List.of("INFY.NS"));
+
+        assertEquals(Set.of("INFY.NS"), service.symbolsFor(1L));
     }
 
     private static Holding holding(String symbol) {

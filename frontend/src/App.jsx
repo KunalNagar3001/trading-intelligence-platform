@@ -144,6 +144,98 @@ function Login({ onToken }) {
   );
 }
 
+// ---------- watchlists ----------
+// Named lists of symbols (the server creates a "Default" list on first use). Every symbol on any list streams
+// live prices over the same WebSocket as holdings and alerts, so prices here come from the shared `prices` map.
+function Watchlists({ call, prices, search }) {
+  const [lists, setLists] = useState([]);
+  const [selected, setSelected] = useState(null); // id of the list being shown
+  const [symbol, setSymbol] = useState('');
+  const [newName, setNewName] = useState('');
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      const data = await call('/api/watchlists');
+      setLists(data);
+      setSelected((id) => (data.some((l) => l.id === id) ? id : (data[0]?.id ?? null)));
+    } catch (err) { setError(err.message); }
+  }, [call]);
+  useEffect(() => { load(); }, [load]);
+
+  const current = lists.find((l) => l.id === selected);
+
+  // Runs one change, then reloads every list so the screen always shows what the server has.
+  const run = (fn) => async (e) => {
+    e?.preventDefault(); setError('');
+    try { await fn(); await load(); } catch (err) { setError(err.message); }
+  };
+
+  const addSymbol = run(async () => {
+    await call(`/api/watchlists/${current.id}/items`, {
+      method: 'POST', body: JSON.stringify({ symbol: symbol.trim().toUpperCase() }),
+    });
+    setSymbol('');
+  });
+  const removeSymbol = (s) => run(() => call(`/api/watchlists/${current.id}/items/${encodeURIComponent(s)}`, { method: 'DELETE' }));
+  const createList = run(async () => {
+    const created = await call('/api/watchlists', { method: 'POST', body: JSON.stringify({ name: newName }) });
+    setNewName(''); setSelected(created.id);
+  });
+  const renameList = run(async () => {
+    const name = window.prompt('Rename watchlist', current.name);
+    if (name && name.trim() && name.trim() !== current.name) {
+      await call(`/api/watchlists/${current.id}`, { method: 'PATCH', body: JSON.stringify({ name }) });
+    }
+  });
+  const deleteList = run(async () => {
+    if (!window.confirm(`Delete "${current.name}" and its ${current.items.length} symbols?`)) return;
+    await call(`/api/watchlists/${current.id}`, { method: 'DELETE' });
+  });
+
+  return (
+    <section className="panel">
+      <h2>Watchlists</h2>
+      {error && <p className="err">{error}</p>}
+      <div className="tabs">
+        {lists.map((l) => (
+          <button key={l.id} type="button" className={l.id === selected ? 'tab active' : 'tab'} onClick={() => setSelected(l.id)}>
+            {l.name} <small>{l.items.length}</small>
+          </button>))}
+      </div>
+      {current && (
+        <>
+          {current.items.length === 0 ? <p className="empty">No symbols in this list yet.</p> : (
+            <div className="scroll"><table><tbody>
+              {current.items.map((item) => {
+                const p = prices[item.symbol];
+                return (
+                  <tr key={item.symbol}>
+                    <td>{item.symbol}</td>
+                    <td key={p?.tick} className={`r num ${p?.dir ? 'flash-' + p.dir : ''}`}>{p ? money(p.price) : '–'}</td>
+                    <td className="r"><button type="button" className="danger" title="Remove" onClick={removeSymbol(item.symbol)}>×</button></td>
+                  </tr>);
+              })}
+            </tbody></table></div>
+          )}
+          <form className="row" onSubmit={addSymbol}>
+            <SymbolInput placeholder="Add symbol" value={symbol} search={search} onChange={setSymbol} />
+            <button type="submit">Add</button>
+          </form>
+          <div className="row">
+            <button type="button" className="ghost" onClick={renameList}>Rename</button>
+            {!current.defaultList && <button type="button" className="danger" onClick={deleteList}>Delete list</button>}
+          </div>
+        </>
+      )}
+      <form className="row" onSubmit={createList}>
+        <input placeholder="New watchlist name" value={newName} onChange={(e) => setNewName(e.target.value)} maxLength={50} required />
+        <button type="submit" className="ghost">Create</button>
+      </form>
+    </section>
+  );
+}
+
 // ---------- dashboard ----------
 function Dashboard({ token, onLogout }) {
   const { prices, connected } = useLivePrices(token, onLogout);
@@ -248,15 +340,18 @@ function Dashboard({ token, onLogout }) {
           </form>
         </section>
 
-        <section className="panel">
-          <h2>Live prices</h2>
-          {Object.keys(prices).length === 0
-            ? <p className="empty">Waiting for prices. Symbols you hold or have alerts on stream here every few seconds.</p>
-            : <div className="scroll"><table><tbody>{Object.entries(prices).map(([symbol, p]) => (
-                <tr key={symbol}><td>{symbol}</td>
-                  <td key={p.tick} className={`r num ${p.dir ? 'flash-' + p.dir : ''}`}>{money(p.price)}</td></tr>))}
-              </tbody></table></div>}
-        </section>
+        <div className="col">
+          <section className="panel">
+            <h2>Live prices</h2>
+            {Object.keys(prices).length === 0
+              ? <p className="empty">Waiting for prices. Symbols you hold, watch or have alerts on stream here every few seconds.</p>
+              : <div className="scroll"><table><tbody>{Object.entries(prices).map(([symbol, p]) => (
+                  <tr key={symbol}><td>{symbol}</td>
+                    <td key={p.tick} className={`r num ${p.dir ? 'flash-' + p.dir : ''}`}>{money(p.price)}</td></tr>))}
+                </tbody></table></div>}
+          </section>
+          <Watchlists call={call} prices={prices} search={searchStocks} />
+        </div>
 
         <section className="panel" style={{ gridColumn: '1 / -1' }}>
           <h2>Alerts</h2>

@@ -3,6 +3,7 @@ package com.trading.platform.websocket;
 import com.trading.platform.kafka.producer.PriceEventProducer;
 import com.trading.platform.repository.mysql.AlertRepository;
 import com.trading.platform.repository.mysql.HoldingRepository;
+import com.trading.platform.repository.mysql.WatchlistItemRepository;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -21,6 +22,7 @@ public class PriceBroadcaster {
     private final RedisTemplate<String, String> redisTemplate;
     private final AlertRepository alertRepository;
     private final HoldingRepository holdingRepository;
+    private final WatchlistItemRepository watchlistItemRepository;
     private final Random random = new Random();
 
     // symbol -> simulated price, grows/shrinks as symbols enter/leave use
@@ -29,11 +31,13 @@ public class PriceBroadcaster {
     public PriceBroadcaster(PriceEventProducer priceEventProducer,
                             RedisTemplate<String, String> redisTemplate,
                             AlertRepository alertRepository,
-                            HoldingRepository holdingRepository) {
+                            HoldingRepository holdingRepository,
+                            WatchlistItemRepository watchlistItemRepository) {
         this.priceEventProducer = priceEventProducer;
         this.redisTemplate = redisTemplate;
         this.alertRepository = alertRepository;
         this.holdingRepository = holdingRepository;
+        this.watchlistItemRepository = watchlistItemRepository;
     }
 
     @Scheduled(fixedRate = 3000)
@@ -61,8 +65,6 @@ public class PriceBroadcaster {
     }
 
     private double seedPrice() {
-        // starting point for a symbol we haven't priced before;
-        // replace with a real lookup once a market-data source is wired in
         return 100 + random.nextDouble() * 2900;
     }
 }
