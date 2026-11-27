@@ -51,3 +51,8 @@ button.danger { background: transparent; color: var(--loss); border-color: var(-
 .suggest li { display: flex; justify-content: space-between; gap: 10px; padding: 5px 8px; border-radius: 4px; cursor: pointer; }
 .suggest li.active, .suggest li:hover { background: var(--bg); }
 .suggest small { color: var(--muted); }
+.col { display: grid; gap: 14px; align-content: start; min-width: 0; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.tab { background: transparent; color: var(--accent); padding: 3px 9px; }
+.tab.active { background: var(--accent); color: #fff; }
+.tab small { opacity: .75; margin-left: 2px; }
